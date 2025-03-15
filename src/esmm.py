@@ -22,6 +22,21 @@ class FeatureExtractor(nn.Module):
         return concat_feats
 
 
+class SharedBottom(nn.Module):
+    def __init__(self, input_dim, hidden_dims):
+        super().__init__()
+        self.mlp = nn.Sequential(
+            nn.Linear(input_dim, hidden_dims[0]),
+            nn.ReLU(),
+            nn.Linear(hidden_dims[0], hidden_dims[1]),
+            nn.ReLU(),
+        )
+
+    def forward(self, x):
+        shared_feat = self.mlp(x)
+        return shared_feat
+
+
 class CTRTower(nn.Module):
     def __init__(self, input_dim, hidden_dims):
         super().__init__()
@@ -68,22 +83,13 @@ class ESMM(nn.Module):
         self.input_dim = cat_dim + num_numerical
 
         self.feature_extractor = FeatureExtractor(self.embedding_sizes)
-
-        self.shared_bottom = nn.Sequential(
-            nn.Linear(self.input_dim, hidden_dims[0]),
-            nn.ReLU(),
-            nn.Linear(hidden_dims[0], hidden_dims[1]),
-            nn.ReLU(),
-        )
-
+        self.shared_bottom = SharedBottom(self.input_dim, hidden_dims)
         self.ctr_tower = CTRTower(hidden_dims[1], task_tower_hidden_dims)
         self.cvr_tower = CVRTower(hidden_dims[1], task_tower_hidden_dims)
 
     def forward(self, categorical_feats, numerical_feats):
         concat_feat = self.feature_extractor(categorical_feats, numerical_feats)
-
         shared_feat = self.shared_bottom(concat_feat)
-
         p_ctr = self.ctr_tower(shared_feat)
         p_cvr = self.cvr_tower(shared_feat)
 
